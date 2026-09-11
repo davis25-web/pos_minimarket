@@ -1,0 +1,295 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <h2>Productos</h2>
+    <div class="form-row" style="margin-bottom:0.5rem;">
+      <div><input type="text" id="buscador" placeholder="Buscar producto..."></div>
+      <div>
+        <select id="filtro-categoria" onchange="filtrarCategoria(this.value)">
+          <option value="">Todas las categorías</option>
+          {% for c in categorias %}
+          <option value="{{ c.id }}" {{ 'selected' if categoria_actual==c.id|string }}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div id="lista-productos">
+      {% for p in productos %}
+      <div class="producto-item" data-nombre="{{ p.nombre|lower }}">
+        {% if p.imagen %}
+          <img src="{{ url_for('static', filename='uploads/productos/' + p.imagen) }}">
+        {% else %}
+          <div class="placeholder-img">📦</div>
+        {% endif %}
+        <div class="info">
+          <strong>{{ p.nombre }}</strong><br>
+          <small style="color:#6b7280;">Stock: {{ p.stock }} und.{% if p.categoria_nombre %} · {{ p.categoria_nombre }}{% endif %}</small>
+        </div>
+        <div class="precio">S/ {{ "%.2f"|format((presentaciones[p.id]|selectattr('es_base')|first).precio_venta) }}</div>
+        <button onclick='abrirSelector({{ p.id }}, "{{ p.nombre|replace("\"", "") }}", {{ presentaciones[p.id]|tojson }}, {{ p.stock }})'>Agregar</button>
+      </div>
+      {% else %}
+      <p style="color:#6b7280;">No hay productos con stock disponible en esta categoría.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Carrito</h2>
+    <div id="carrito"></div>
+    <div class="total-box">Total: S/ <span id="total">0.00</span></div>
+
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>Cliente (opcional)</label>
+      <input type="text" id="cliente-nombre" placeholder="Nombre del cliente">
+    </div>
+
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>Método de pago</label>
+      <div id="metodos-pago" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.5rem;">
+        <button type="button" class="metodo-btn active" data-metodo="Efectivo" onclick="seleccionarMetodo('Efectivo')">💵 Efectivo</button>
+        <button type="button" class="metodo-btn" data-metodo="Yape" onclick="seleccionarMetodo('Yape')">📱 Yape</button>
+        <button type="button" class="metodo-btn" data-metodo="Plin" onclick="seleccionarMetodo('Plin')">📱 Plin</button>
+        <button type="button" class="metodo-btn" data-metodo="Tarjeta" onclick="seleccionarMetodo('Tarjeta')">💳 Tarjeta</button>
+      </div>
+    </div>
+
+    <div id="bloque-efectivo" class="field" style="margin-bottom:0.75rem;">
+      <label>¿Con cuánto paga el cliente?</label>
+      <input type="number" step="0.10" id="monto-pagado" placeholder="0.00" oninput="calcularVuelto()">
+      <div id="vuelto-box" style="margin-top:0.5rem; font-size:1.1rem; font-weight:700;"></div>
+    </div>
+
+    <button id="btn-cobrar" onclick="cobrar()" style="width:100%;">Cobrar</button>
+    <div id="resultado" style="margin-top:1rem;"></div>
+  </div>
+</div>
+
+<div id="modal-selector" class="modal-overlay" style="display:none;" onclick="if(event.target===this) cerrarSelector()">
+  <div class="modal-box">
+    <h3 id="modal-titulo">Producto</h3>
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>Presentación</label>
+      <select id="modal-presentacion" onchange="actualizarModalPrecio()"></select>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Cantidad</label>
+        <input type="number" id="modal-cantidad" value="1" min="1" oninput="actualizarModalPrecio()">
+      </div>
+      <div>
+        <label>Precio (editable)</label>
+        <input type="number" step="0.01" id="modal-precio">
+      </div>
+    </div>
+    <p id="modal-stock-info" style="font-size:0.8rem; color:#6b7280;"></p>
+    <button onclick="confirmarAgregar()" style="width:100%;">Agregar al carrito</button>
+  </div>
+</div>
+
+<script>
+let carrito = {};
+let metodoPago = "Efectivo";
+let modalActual = null;
+
+function filtrarCategoria(id) {
+  const url = new URL(window.location);
+  if (id) url.searchParams.set('categoria', id); else url.searchParams.delete('categoria');
+  window.location = url;
+}
+
+function abrirSelector(productoId, nombre, presentaciones, stock) {
+  modalActual = { productoId, nombre, presentaciones, stock };
+  document.getElementById("modal-titulo").textContent = nombre;
+  const sel = document.getElementById("modal-presentacion");
+  sel.innerHTML = "";
+  presentaciones.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.es_base ? (p.nombre + " (S/ " + p.precio_venta.toFixed(2) + ")") : (p.nombre + " = " + p.factor + " und. (S/ " + p.precio_venta.toFixed(2) + ")");
+    sel.appendChild(opt);
+  });
+  document.getElementById("modal-cantidad").value = 1;
+  actualizarModalPrecio();
+  document.getElementById("modal-selector").style.display = "flex";
+}
+
+function cerrarSelector() {
+  document.getElementById("modal-selector").style.display = "none";
+  modalActual = null;
+}
+
+function presentacionSeleccionada() {
+  const id = parseInt(document.getElementById("modal-presentacion").value);
+  return modalActual.presentaciones.find(p => p.id === id);
+}
+
+function actualizarModalPrecio() {
+  const pres = presentacionSeleccionada();
+  if (!pres) return;
+  document.getElementById("modal-precio").value = pres.precio_venta.toFixed(2);
+  const stockDisponibleEnEstaPresentacion = Math.floor(modalActual.stock / pres.factor);
+  document.getElementById("modal-stock-info").textContent =
+    "Disponible: " + stockDisponibleEnEstaPresentacion + " " + pres.nombre + "(s) (stock total: " + modalActual.stock + " unidades)";
+}
+
+function confirmarAgregar() {
+  const pres = presentacionSeleccionada();
+  const cantidad = parseFloat(document.getElementById("modal-cantidad").value);
+  const precio = parseFloat(document.getElementById("modal-precio").value);
+  if (!cantidad || cantidad <= 0) { alert("Cantidad inválida"); return; }
+  if (isNaN(precio) || precio < 0) { alert("Precio inválido"); return; }
+
+  const cantidadBase = cantidad * pres.factor;
+  const key = modalActual.productoId + "-" + pres.id;
+  const yaEnCarrito = Object.values(carrito)
+    .filter(i => i.productoId === modalActual.productoId)
+    .reduce((acc, i) => acc + i.cantidad * i.factor, 0);
+
+  if (yaEnCarrito + cantidadBase > modalActual.stock) {
+    alert("No hay suficiente stock para esa cantidad");
+    return;
+  }
+
+  carrito[key] = {
+    productoId: modalActual.productoId,
+    presentacionId: pres.id,
+    nombre: modalActual.nombre,
+    presentacionNombre: pres.nombre,
+    factor: pres.factor,
+    cantidad: (carrito[key] ? carrito[key].cantidad : 0) + cantidad,
+    precio: precio,
+    stockTotal: modalActual.stock
+  };
+  renderCarrito();
+  cerrarSelector();
+}
+
+function quitarDelCarrito(key) { delete carrito[key]; renderCarrito(); }
+
+function renderCarrito() {
+  const cont = document.getElementById("carrito");
+  cont.innerHTML = "";
+  let total = 0;
+  for (const [key, item] of Object.entries(carrito)) {
+    const subtotal = item.precio * item.cantidad;
+    total += subtotal;
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML =
+      '<div class="row1"><strong>' + item.nombre + '</strong>' +
+        '<button class="danger small" onclick="quitarDelCarrito(\'' + key + '\')">Quitar</button></div>' +
+      '<div class="row2">' +
+        '<span>' + item.presentacionNombre + ' × ' +
+          '<input type="number" min="1" value="' + item.cantidad + '" onchange="cambiarCantidad(\'' + key + '\', this.value)"></span>' +
+        '<span>S/ <input type="number" step="0.01" value="' + item.precio.toFixed(2) + '" onchange="cambiarPrecio(\'' + key + '\', this.value)"></span>' +
+        '<strong>S/ ' + subtotal.toFixed(2) + '</strong>' +
+      '</div>';
+    cont.appendChild(div);
+  }
+  document.getElementById("total").textContent = total.toFixed(2);
+  calcularVuelto();
+}
+
+function cambiarCantidad(key, valor) {
+  const cantidad = parseFloat(valor);
+  if (!cantidad || cantidad <= 0) { renderCarrito(); return; }
+  carrito[key].cantidad = cantidad;
+  renderCarrito();
+}
+
+function cambiarPrecio(key, valor) {
+  const precio = parseFloat(valor);
+  if (isNaN(precio) || precio < 0) { renderCarrito(); return; }
+  carrito[key].precio = precio;
+  renderCarrito();
+}
+
+function seleccionarMetodo(metodo) {
+  metodoPago = metodo;
+  document.querySelectorAll(".metodo-btn").forEach(b => b.classList.toggle("active", b.dataset.metodo === metodo));
+  document.getElementById("bloque-efectivo").style.display = metodo === "Efectivo" ? "block" : "none";
+  calcularVuelto();
+}
+
+function totalCarrito() {
+  return Object.values(carrito).reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+}
+
+function calcularVuelto() {
+  const total = totalCarrito();
+  const box = document.getElementById("vuelto-box");
+  if (metodoPago !== "Efectivo") { box.textContent = ""; return; }
+  const pagado = parseFloat(document.getElementById("monto-pagado").value);
+  if (isNaN(pagado)) { box.textContent = ""; return; }
+  const vuelto = pagado - total;
+  if (vuelto < 0) { box.style.color = "#ef4444"; box.textContent = "Falta S/ " + Math.abs(vuelto).toFixed(2); }
+  else { box.style.color = "#10b981"; box.textContent = "Vuelto: S/ " + vuelto.toFixed(2); }
+}
+
+async function cobrar() {
+  const items = Object.values(carrito).map(item => ({
+    producto_id: item.productoId,
+    presentacion_id: item.presentacionId,
+    cantidad: item.cantidad,
+    precio: item.precio
+  }));
+  if (items.length === 0) { alert("El carrito está vacío"); return; }
+
+  let montoPagado = null;
+  if (metodoPago === "Efectivo") {
+    montoPagado = parseFloat(document.getElementById("monto-pagado").value);
+    if (isNaN(montoPagado)) { alert("Indica con cuánto paga el cliente"); return; }
+    if (montoPagado < totalCarrito()) { alert("El monto pagado es menor al total de la venta"); return; }
+  }
+
+  const btn = document.getElementById("btn-cobrar");
+  btn.disabled = true;
+  btn.textContent = "Procesando...";
+
+  try {
+    const res = await fetch("/api/vender", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        carrito: items, metodo_pago: metodoPago, monto_pagado: montoPagado,
+        cliente_nombre: document.getElementById("cliente-nombre").value
+      })
+    });
+    const data = await res.json();
+    const resDiv = document.getElementById("resultado");
+
+    if (data.error) {
+      resDiv.innerHTML = '<div class="flash error">' + data.error + '</div>';
+    } else {
+      let vueltoHtml = "";
+      if (data.metodo_pago === "Efectivo") {
+        vueltoHtml = "<br>Pagó: S/ " + data.monto_pagado.toFixed(2) + " — Vuelto: S/ " + data.vuelto.toFixed(2);
+      }
+      const alertasHtml = (data.alertas || []).map(a => '<div class="flash error">' + a + '</div>').join("");
+      resDiv.innerHTML = '<div class="flash success">Venta #' + data.venta_id + ' registrada (' + data.metodo_pago + ') — Total S/ ' + data.total.toFixed(2) + vueltoHtml +
+        '<br><a href="/venta/' + data.venta_id + '/comprobante" target="_blank" style="color:#5b21b6; font-weight:800;">Ver / imprimir comprobante →</a></div>' + alertasHtml;
+      carrito = {};
+      renderCarrito();
+      document.getElementById("monto-pagado").value = "";
+      document.getElementById("cliente-nombre").value = "";
+      seleccionarMetodo("Efectivo");
+      setTimeout(() => location.reload(), 2500);
+    }
+  } catch (e) {
+    document.getElementById("resultado").innerHTML = '<div class="flash error">Error de conexión con el servidor local</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Cobrar";
+  }
+}
+
+document.getElementById("buscador").addEventListener("input", (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll(".producto-item").forEach(el => {
+    el.style.display = el.dataset.nombre.includes(q) ? "flex" : "none";
+  });
+});
+</script>
+{% endblock %}

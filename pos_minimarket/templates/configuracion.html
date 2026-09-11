@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <h2>⚙️ Configuración de la tienda</h2>
+  <form method="POST">
+    <div class="field" style="margin-bottom:1rem;">
+      <label>Número de WhatsApp para contacto con clientes (con código de país, ej. 51987654321)</label>
+      <input type="text" name="whatsapp_numero" value="{{ whatsapp_numero }}" placeholder="51987654321">
+    </div>
+    <button type="submit">Guardar</button>
+  </form>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <h3>🌐 Tu catálogo web</h3>
+  <p style="color:#6b7280; font-size:0.9rem;">Comparte este link con tus clientes para que vean tus productos y hagan pedidos:</p>
+  <input type="text" readonly value="{{ url_catalogo }}" onclick="this.select()">
+  <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
+    ⚠️ Este link solo funciona mientras tu computadora esté encendida, el sistema corriendo, y en la misma red que el cliente
+    (o si configuras acceso público a tu servidor — pregúntame si quieres que te ayude a exponerlo a internet).
+  </p>
+</div>
+{% endblock %}

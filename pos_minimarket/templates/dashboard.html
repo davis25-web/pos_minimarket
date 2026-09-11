@@ -1,0 +1,58 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card purple">
+    <div class="label">Ventas de hoy</div>
+    <div class="value">S/ {{ "%.2f"|format(total_ventas_hoy) }}</div>
+    <div class="sub">{{ cantidad_ventas_hoy }} venta(s) registradas</div>
+  </div>
+  <div class="stat-card green">
+    <div class="label">Ganancia de hoy</div>
+    <div class="value">S/ {{ "%.2f"|format(ganancia_hoy) }}</div>
+    <div class="sub">Ingresos menos costo de productos</div>
+  </div>
+  <div class="stat-card pink">
+    <div class="label">Ganancia total histórica</div>
+    <div class="value">S/ {{ "%.2f"|format(ganancia_total) }}</div>
+    <div class="sub">Desde que empezaste a vender</div>
+  </div>
+  <div class="stat-card orange">
+    <div class="label">Alertas / Pedidos web</div>
+    <div class="value">{{ stock_bajo|length }} / {{ pedidos_pendientes }}</div>
+    <div class="sub">Stock bajo · Pedidos pendientes</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>🏆 Productos más vendidos</h2>
+    {% for p in top_productos %}
+    <div class="ranking-item">
+      <div class="pos">{{ loop.index }}</div>
+      <div class="nombre">{{ p.nombre }}
+        <div style="font-size:0.78rem; color:#6b7280; font-weight:400;">{{ p.unidades }} unidades · S/ {{ "%.2f"|format(p.total_vendido) }} vendidos</div>
+      </div>
+      <div class="ganancia">+S/ {{ "%.2f"|format(p.ganancia) }}</div>
+    </div>
+    {% else %}
+    <p style="color:#6b7280;">Aún no hay ventas registradas.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>💳 Ventas de hoy por método de pago</h2>
+    {% for m in por_metodo %}
+    <div class="metodo-pill"><span>{{ m.metodo_pago }} ({{ m.c }})</span><span>S/ {{ "%.2f"|format(m.t) }}</span></div>
+    {% else %}
+    <p style="color:#6b7280;">Todavía no hay ventas hoy.</p>
+    {% endfor %}
+
+    <h2 style="margin-top:1.5rem;">⚠️ Stock bajo</h2>
+    {% for p in stock_bajo %}
+    <div class="metodo-pill" style="background:#fef3c7;"><span>{{ p.nombre }}</span><span class="badge low">{{ p.stock }} und.</span></div>
+    {% else %}
+    <p style="color:#6b7280;">Todo tu stock está en buen nivel. ✅</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

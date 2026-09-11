@@ -1,0 +1,67 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="no-imprimir" style="margin-bottom:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  {% if venta.cliente_nombre %}
+  <form method="POST" action="{{ url_for('venta_enviar_correo', venta_id=venta.id) }}" style="display:flex; gap:0.4rem;">
+    <input type="email" name="correo" placeholder="correo@cliente.com" required style="width:220px;">
+    <button type="submit" class="secondary">✉️ Enviar por correo</button>
+  </form>
+  {% endif %}
+  <a class="btn success-btn" id="link-whatsapp" href="#" target="_blank">📲 Enviar por WhatsApp</a>
+  {% if session.rol == 'admin' and not venta.anulada %}
+  <form method="POST" action="{{ url_for('venta_anular', venta_id=venta.id) }}" onsubmit="return confirm('¿Anular esta venta? El stock vendido se devolverá al inventario.') ? (document.getElementById('motivo-anular').value = prompt('Motivo de anulación:') || 'Sin motivo') : false;">
+    <input type="hidden" name="motivo" id="motivo-anular">
+    <button type="submit" class="danger">🗑️ Anular venta</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if venta.anulada %}
+<div class="flash error no-imprimir">Esta venta fue ANULADA el {{ venta.anulada_fecha }}. Motivo: {{ venta.anulada_motivo }}</div>
+{% endif %}
+
+<div class="card comprobante">
+  <div style="text-align:center;">
+    <strong style="font-size:1.1rem;">{{ nombre_tienda }}</strong><br>
+    <small>Comprobante de venta interno</small>
+  </div>
+  <hr>
+  <div>Venta #{{ venta.id }}{% if venta.anulada %} — <strong style="color:#ef4444;">ANULADA</strong>{% endif %}<br>
+  Fecha: {{ venta.fecha }}<br>
+  Atendido por: {{ venta.username }}<br>
+  {% if venta.cliente_nombre %}Cliente: {{ venta.cliente_nombre }}<br>{% endif %}
+  Método de pago: {{ venta.metodo_pago }}</div>
+  <hr>
+  {% for d in detalle %}
+  <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+    <span>{{ d.cantidad|int if d.cantidad == d.cantidad|int else d.cantidad }} {{ d.presentacion_nombre }} — {{ d.producto_nombre }}<br>
+      <small>S/ {{ "%.2f"|format(d.precio_unitario) }} c/u</small></span>
+    <span>S/ {{ "%.2f"|format(d.subtotal) }}</span>
+  </div>
+  {% endfor %}
+  <hr>
+  <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.1rem;">
+    <span>TOTAL</span><span>S/ {{ "%.2f"|format(venta.total) }}</span>
+  </div>
+  {% if venta.metodo_pago == 'Efectivo' %}
+  <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+    <span>Pagó con</span><span>S/ {{ "%.2f"|format(venta.monto_pagado) }}</span>
+  </div>
+  <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+    <span>Vuelto</span><span>S/ {{ "%.2f"|format(venta.vuelto) }}</span>
+  </div>
+  {% endif %}
+  <hr>
+  <div style="text-align:center; font-size:0.85rem;">¡Gracias por su compra!</div>
+</div>
+
+<script>
+const total = {{ venta.total }};
+const mensaje = encodeURIComponent(
+  "Hola, te comparto tu comprobante de compra en {{ nombre_tienda }}:\n" +
+  "Venta #{{ venta.id }} - Total S/ " + total.toFixed(2)
+);
+document.getElementById("link-whatsapp").href = "https://wa.me/?text=" + mensaje;
+</script>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="card" style="max-width:600px;">
+  <h2>Crear usuario</h2>
+  <form method="POST">
+    <div class="form-row">
+      <div><label>Usuario (para iniciar sesión)</label><input type="text" name="username" required></div>
+      <div><label>Nombre completo</label><input type="text" name="nombre_completo"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Contraseña (mín. 6 caracteres)</label><input type="password" name="password" required minlength="6"></div>
+      <div>
+        <label>Rol</label>
+        <select name="rol">
+          <option value="vendedor">Vendedor (solo Ventas y Caja)</option>
+          <option value="admin">Administrador (acceso completo)</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit">Crear usuario</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Usuarios del sistema</h2>
+  <table>
+    <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      {% for u in usuarios %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td>{{ u.nombre_completo or '—' }}</td>
+        <td><span class="badge {{ u.rol }}">{{ 'Administrador' if u.rol=='admin' else 'Vendedor' }}</span></td>
+        <td>{% if u.activo %}<span class="badge ok">Activo</span>{% else %}<span class="badge anulada">Inactivo</span>{% endif %}</td>
+        <td>
+          <form method="POST" action="{{ url_for('usuarios_desactivar', usuario_id=u.id) }}">
+            <button type="submit" class="secondary small">{{ 'Desactivar' if u.activo else 'Activar' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

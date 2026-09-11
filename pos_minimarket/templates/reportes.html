@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <h3>Ventas de hoy</h3>
+    <div class="total-box">S/ {{ "%.2f"|format(total_hoy) }}</div>
+  </div>
+  <div class="card">
+    <h3>Sincronización</h3>
+    {% if pendientes_sync > 0 %}
+      <span class="badge low">{{ pendientes_sync }} venta(s) pendientes de subir a la nube</span>
+      <p style="color:#6b7280; font-size:0.85rem;">Se sincronizarán automáticamente cuando haya internet. El sistema sigue funcionando con normalidad mientras tanto.</p>
+    {% else %}
+      <span class="badge ok">Todo sincronizado</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Últimas ventas</h2>
+  <table>
+    <thead><tr><th>#</th><th>Fecha</th><th>Vendedor</th><th>Método</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+      {% for v in ventas %}
+      <tr>
+        <td>{{ v.id }}</td>
+        <td>{{ v.fecha }}</td>
+        <td>{{ v.username }}</td>
+        <td>{{ v.metodo_pago }}</td>
+        <td>S/ {{ "%.2f"|format(v.total) }}</td>
+        <td>
+          {% if v.anulada %}<span class="badge anulada">Anulada</span>{% else %}<span class="badge ok">Válida</span>{% endif %}
+        </td>
+        <td><a class="btn small" href="{{ url_for('venta_comprobante', venta_id=v.id) }}" target="_blank">Ver</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="color:#6b7280;">Aún no hay ventas registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>🌐 Pedidos recibidos desde el catálogo web</h2>
+  <table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Celular</th><th>Pago</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead>
+    <tbody>
+      {% for pd in pedidos_web %}
+      <tr>
+        <td>{{ pd.fecha }}</td>
+        <td>{{ pd.cliente_nombre }}</td>
+        <td>{{ pd.cliente_telefono }}</td>
+        <td>{{ pd.metodo_pago }}</td>
+        <td>S/ {{ "%.2f"|format(pd.total) }}</td>
+        <td><span class="badge {{ pd.estado }}">{{ pd.estado }}</span></td>
+        <td>
+          <a class="btn small" href="https://wa.me/{{ pd.cliente_telefono|replace('+','')|replace(' ','') }}" target="_blank">WhatsApp</a>
+          {% if pd.estado == 'pendiente' %}
+          <form method="POST" action="{{ url_for('pedido_web_estado', pedido_id=pd.id) }}" style="display:inline;">
+            <input type="hidden" name="estado" value="atendido">
+            <button type="submit" class="success-btn small">Marcar atendido</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="color:#6b7280;">Aún no has recibido pedidos desde el catálogo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="card" style="max-width:500px;">
+  <h2>Categorías de productos</h2>
+  <form method="POST" class="form-row">
+    <div><input type="text" name="nombre" placeholder="Nombre de la categoría" required></div>
+    <div style="flex:0;"><button type="submit">Agregar</button></div>
+  </form>
+  <table>
+    <thead><tr><th>Nombre</th><th>Acciones</th></tr></thead>
+    <tbody>
+      {% for c in categorias %}
+      <tr>
+        <td>{{ c.nombre }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('categorias_eliminar', categoria_id=c.id) }}" onsubmit="return confirm('¿Eliminar esta categoría? Los productos quedarán sin categoría.');">
+            <button type="submit" class="danger small">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2" style="color:#6b7280;">Aún no hay categorías.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

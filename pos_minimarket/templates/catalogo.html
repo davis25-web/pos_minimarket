@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ nombre_tienda }} — Catálogo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body style="background:#f5f3ff;">
+
+<div class="catalogo-header">
+  <h1>🛍️ {{ nombre_tienda }}</h1>
+  <p>Mira nuestros productos y haz tu pedido — coordinamos el envío por WhatsApp</p>
+</div>
+
+<div class="container">
+  <div class="form-row" style="max-width:400px; margin:0 auto 1.2rem;">
+    <select onchange="if(this.value) window.location='?categoria='+this.value; else window.location='{{ url_for('catalogo') }}';">
+      <option value="">Todas las categorías</option>
+      {% for c in categorias %}
+      <option value="{{ c.id }}" {{ 'selected' if categoria_actual==c.id|string }}>{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="catalogo-grid">
+    {% for p in productos %}
+    <div class="catalogo-card">
+      {% if p.imagen %}
+        <img class="foto" src="{{ url_for('static', filename='uploads/productos/' + p.imagen) }}">
+      {% else %}
+        <div class="foto">📦</div>
+      {% endif %}
+      <div class="cuerpo">
+        <strong>{{ p.nombre }}</strong>
+        {% if p.categoria_nombre %}<div style="font-size:0.78rem; color:#6b7280;">{{ p.categoria_nombre }}</div>{% endif %}
+        <div class="precio">S/ {{ "%.2f"|format(p.precio) }}</div>
+        <button onclick='agregarAlPedido({{ p.id }}, "{{ p.nombre|replace("\"", "") }}", {{ p.precio }})' style="margin-top:auto;">Agregar al pedido</button>
+      </div>
+    </div>
+    {% else %}
+    <p style="color:#6b7280; grid-column:1/-1; text-align:center;">Aún no hay productos disponibles.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{% if whatsapp_tienda %}
+<a class="whatsapp-fab" id="whatsapp-directo" href="#" target="_blank" title="Escríbenos por WhatsApp">💬</a>
+{% endif %}
+
+<div class="cart-fab" onclick="abrirCarrito()">🛒 Mi pedido (<span id="contador-carrito">0</span>)</div>
+
+<div id="modal-carrito" class="modal-overlay" style="display:none;" onclick="if(event.target===this) cerrarCarrito()">
+  <div class="modal-box">
+    <h3>Tu pedido</h3>
+    <div id="lista-carrito"></div>
+    <div class="total-box">Total: S/ <span id="total-carrito">0.00</span></div>
+
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>Tu nombre</label>
+      <input type="text" id="cliente-nombre" placeholder="Nombre completo" required>
+    </div>
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>Tu número de celular (WhatsApp)</label>
+      <input type="text" id="cliente-telefono" placeholder="987654321" required>
+    </div>
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>¿Cómo vas a pagar?</label>
+      <select id="metodo-pago-pedido">
+        <option value="Efectivo">Efectivo (contra entrega)</option>
+        <option value="Yape">Yape</option>
+        <option value="Plin">Plin</option>
+        <option value="Tarjeta">Tarjeta</option>
+        <option value="Coordinar">Coordinar por WhatsApp</option>
+      </select>
+    </div>
+    <button onclick="enviarPedido()" style="width:100%;">Enviar pedido</button>
+    <button onclick="cerrarCarrito()" class="secondary" style="width:100%; margin-top:0.5rem;">Seguir viendo productos</button>
+    <div id="resultado-pedido" style="margin-top:1rem;"></div>
+  </div>
+</div>
+
+<script>
+let pedido = {};
+const whatsappTienda = "{{ whatsapp_tienda }}";
+
+if (whatsappTienda) {
+  document.getElementById("whatsapp-directo").href =
+    "https://wa.me/" + whatsappTienda + "?text=" + encodeURIComponent("Hola, quisiera hacer una consulta sobre sus productos.");
+}
+
+function agregarAlPedido(id, nombre, precio) {
+  if (!pedido[id]) pedido[id] = { nombre, precio, cantidad: 0 };
+  pedido[id].cantidad += 1;
+  actualizarContador();
+}
+
+function actualizarContador() {
+  const total = Object.values(pedido).reduce((acc, i) => acc + i.cantidad, 0);
+  document.getElementById("contador-carrito").textContent = total;
+}
+
+function abrirCarrito() {
+  renderCarrito();
+  document.getElementById("modal-carrito").style.display = "flex";
+}
+function cerrarCarrito() { document.getElementById("modal-carrito").style.display = "none"; }
+
+function quitarItem(id) { delete pedido[id]; renderCarrito(); actualizarContador(); }
+function cambiarCantidadPedido(id, valor) {
+  const c = parseInt(valor);
+  if (!c || c <= 0) { quitarItem(id); return; }
+  pedido[id].cantidad = c;
+  renderCarrito();
+  actualizarContador();
+}
+
+function renderCarrito() {
+  const cont = document.getElementById("lista-carrito");
+  cont.innerHTML = "";
+  let total = 0;
+  for (const [id, item] of Object.entries(pedido)) {
+    const subtotal = item.precio * item.cantidad;
+    total += subtotal;
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML =
+      '<div class="row1"><span>' + item.nombre + '</span>' +
+      '<button class="danger small" onclick="quitarItem(' + id + ')">×</button></div>' +
+      '<div class="row2"><input type="number" min="1" value="' + item.cantidad + '" onchange="cambiarCantidadPedido(' + id + ', this.value)">' +
+      '<strong>S/ ' + subtotal.toFixed(2) + '</strong></div>';
+    cont.appendChild(div);
+  }
+  document.getElementById("total-carrito").textContent = total.toFixed(2);
+  if (Object.keys(pedido).length === 0) {
+    cont.innerHTML = '<p style="color:#6b7280;">Aún no agregaste productos.</p>';
+  }
+}
+
+async function enviarPedido() {
+  const items = Object.entries(pedido).map(([id, item]) => ({ producto_id: parseInt(id), cantidad: item.cantidad }));
+  if (items.length === 0) { alert("Agrega al menos un producto"); return; }
+  const nombre = document.getElementById("cliente-nombre").value.trim();
+  const telefono = document.getElementById("cliente-telefono").value.trim();
+  if (!nombre || !telefono) { alert("Indica tu nombre y celular"); return; }
+
+  try {
+    const res = await fetch("/api/pedido-web", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        carrito: items, cliente_nombre: nombre, cliente_telefono: telefono,
+        metodo_pago: document.getElementById("metodo-pago-pedido").value
+      })
+    });
+    const data = await res.json();
+    const resDiv = document.getElementById("resultado-pedido");
+    if (data.error) {
+      resDiv.innerHTML = '<div class="flash error">' + data.error + '</div>';
+    } else {
+      let resumen = "Hola, acabo de hacer el pedido #" + data.pedido_id + " por S/ " + data.total.toFixed(2) + " a nombre de " + nombre + ". ¿Coordinamos el envío?";
+      let linkWsp = whatsappTienda ? ("https://wa.me/" + whatsappTienda + "?text=" + encodeURIComponent(resumen)) : "#";
+      resDiv.innerHTML = '<div class="flash success">¡Pedido enviado! Total S/ ' + data.total.toFixed(2) +
+        (whatsappTienda ? '<br><a href="' + linkWsp + '" target="_blank" style="color:#5b21b6; font-weight:800;">Confirmar por WhatsApp →</a>' : '') + '</div>';
+      pedido = {};
+      actualizarContador();
+    }
+  } catch (e) {
+    document.getElementById("resultado-pedido").innerHTML = '<div class="flash error">No se pudo enviar el pedido. Intenta de nuevo.</div>';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="card" style="max-width:520px; margin:0 auto;">
+  <h2>🔒 Cierre de caja</h2>
+  <p style="color:#6b7280;">Caja abierta desde: {{ caja.fecha_apertura }}</p>
+
+  <div class="metodo-pill"><span>Monto de apertura</span><span>S/ {{ "%.2f"|format(caja.monto_apertura) }}</span></div>
+  {% for metodo, datos in por_metodo.items() %}
+  <div class="metodo-pill"><span>{{ metodo }} ({{ datos.c }} venta(s))</span><span>S/ {{ "%.2f"|format(datos.t) }}</span></div>
+  {% endfor %}
+  <div class="metodo-pill" style="background:#ede9fe;"><span>Total ventas ({{ cantidad_ventas }})</span><span>S/ {{ "%.2f"|format(total_efectivo + total_otros) }}</span></div>
+
+  <div class="total-box">Efectivo esperado en caja: S/ {{ "%.2f"|format(monto_esperado) }}</div>
+
+  <form method="POST">
+    <div class="field" style="margin-bottom:1rem;">
+      <label>Efectivo real contado en caja (S/)</label>
+      <input type="number" step="0.10" name="monto_cierre_real" required autofocus placeholder="0.00">
+    </div>
+    <button type="submit" class="danger" style="width:100%;">Cerrar caja</button>
+  </form>
+</div>
+{% endblock %}
