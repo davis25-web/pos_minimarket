@@ -1,5 +1,5 @@
 <!-- ========================================================= -->
-<!-- ARCHIVO COMPLETO: templates/catalogo.html                  -->
+<!-- ARCHIVO COMPLETO: pos_minimarket/templates/catalogo.html   -->
 <!-- ========================================================= -->
 <!DOCTYPE html>
 <html lang="es">
@@ -10,10 +10,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800">
+<body class="bg-slate-50 min-h-screen text-slate-800 pb-24">
 
     <!-- Encabezado -->
-    <header class="bg-gradient-to-r from-purple-700 to-indigo-800 text-white shadow-lg sticky top-0 z-50">
+    <header class="bg-gradient-to-r from-purple-700 to-indigo-800 text-white shadow-lg sticky top-0 z-40">
         <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
             <div>
                 <h1 class="text-2xl font-black tracking-tight flex items-center gap-2">
@@ -27,24 +27,27 @@
         </div>
     </header>
 
-    <!-- Contenido del Catálogo -->
-    <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Contenido Principal -->
+    <main class="max-w-6xl mx-auto px-4 py-6">
         
-        <div class="mb-6 flex justify-between items-center">
-            <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <i class="fa-solid fa-boxes-stacked text-purple-600"></i> Nuestros Productos
-            </h2>
-            <span class="text-xs font-semibold px-3 py-1 bg-purple-100 text-purple-800 rounded-full">
-                {{ productos|length }} Disponibles
-            </span>
+        <!-- Filtros por Categoría -->
+        <div class="mb-6 flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+            <button onclick="filtrarCategoria('TODAS', this)" class="cat-btn border px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap bg-purple-600 text-white border-purple-600 shadow-md">
+                Todas
+            </button>
+            {% for cat in categorias %}
+            <button onclick="filtrarCategoria('{{ cat }}', this)" class="cat-btn border px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap bg-white text-slate-600 border-slate-200 hover:bg-slate-100">
+                {{ cat }}
+            </button>
+            {% endfor %}
         </div>
 
         <!-- Grid de Productos -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {% for producto in productos %}
-            <div class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-200 flex flex-col justify-between overflow-hidden group">
+            <div class="card-producto bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-200 flex flex-col justify-between overflow-hidden group" data-categoria="{{ producto.categoria }}">
                 
-                <!-- Contenedor de la Imagen con Fallback Anti-Error -->
+                <!-- Imagen con Fallback -->
                 <div class="w-full h-44 bg-slate-100 overflow-hidden relative flex items-center justify-center p-2">
                     <img 
                         src="{{ producto.imagen_url }}" 
@@ -55,11 +58,11 @@
                     >
                 </div>
 
-                <!-- Info del Producto -->
+                <!-- Detalles -->
                 <div class="p-3.5 flex-1 flex flex-col justify-between">
                     <div>
                         <span class="text-[10px] font-bold text-purple-600 uppercase tracking-wider block mb-1">
-                            {{ producto.categoria or 'GENERAL' }}
+                            {{ producto.categoria }}
                         </span>
                         <h3 class="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">
                             {{ producto.nombre }}
@@ -73,7 +76,7 @@
                                 S/ {{ "%.2f"|format(producto.precio) }}
                             </span>
                         </div>
-                        <button class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-md shadow-purple-200">
+                        <button onclick="agregarAlCarrito('{{ producto.nombre }}', {{ producto.precio }})" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-md shadow-purple-200 active:scale-95">
                             <i class="fa-solid fa-cart-plus"></i>
                         </button>
                     </div>
@@ -83,12 +86,148 @@
             {% else %}
             <div class="col-span-full text-center py-12 bg-white rounded-2xl border border-dashed border-slate-300">
                 <i class="fa-solid fa-box-open text-4xl text-slate-300 mb-3 block"></i>
-                <p class="text-slate-500 font-medium text-sm">No hay productos disponibles en el catálogo.</p>
+                <p class="text-slate-500 font-medium text-sm">No hay productos en el catálogo.</p>
             </div>
             {% endfor %}
         </div>
 
     </main>
 
+    <!-- Botón Flotante del Carrito -->
+    <div class="fixed bottom-6 right-6 z-50">
+        <button onclick="abrirCarrito()" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3.5 px-6 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-white transition transform active:scale-95">
+            <i class="fa-solid fa-cart-shopping text-lg"></i>
+            <span>Mi Pedido (<span id="cart-count">0</span>)</span>
+            <span id="cart-total" class="bg-white/20 px-2 py-0.5 rounded-lg text-xs">S/ 0.00</span>
+        </button>
+    </div>
+
+    <!-- Drawer / Modal del Carrito -->
+    <div id="modal-carrito" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex justify-end">
+        <div class="bg-white w-full max-w-md h-full shadow-2xl p-6 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center border-b pb-4 mb-4">
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-cart-shopping text-purple-600"></i> Mi Pedido
+                    </h3>
+                    <button onclick="cerrarCarrito()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+                </div>
+
+                <!-- Lista de ítems en carrito -->
+                <div id="lista-carrito" class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    <p class="text-slate-400 text-xs text-center py-8">Tu carrito está vacío.</p>
+                </div>
+            </div>
+
+            <!-- Total y Botón WhatsApp -->
+            <div class="border-t pt-4">
+                <div class="flex justify-between items-center text-base font-bold mb-4">
+                    <span>Total a pagar:</span>
+                    <span id="modal-total" class="text-xl font-black text-purple-700">S/ 0.00</span>
+                </div>
+                <button onclick="enviarPedidoWhatsApp()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm">
+                    <i class="fa-brands fa-whatsapp text-lg"></i> Enviar Pedido por WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script del Carrito y Filtros -->
+    <script>
+        let carrito = [];
+
+        function agregarAlCarrito(nombre, precio) {
+            let item = carrito.find(i => i.nombre === nombre);
+            if (item) {
+                item.cantidad++;
+            } else {
+                carrito.push({ nombre, precio, cantidad: 1 });
+            }
+            actualizarCarritoUI();
+        }
+
+        function cambiarCantidad(nombre, delta) {
+            let item = carrito.find(i => i.nombre === nombre);
+            if (item) {
+                item.cantidad += delta;
+                if (item.cantidad <= 0) {
+                    carrito = carrito.filter(i => i.nombre !== nombre);
+                }
+            }
+            actualizarCarritoUI();
+        }
+
+        function actualizarCarritoUI() {
+            let total = 0;
+            let count = 0;
+            let html = '';
+
+            carrito.forEach(i => {
+                let subtotal = i.precio * i.cantidad;
+                total += subtotal;
+                count += i.cantidad;
+                html += `
+                    <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border">
+                        <div>
+                            <p class="font-bold text-xs text-slate-800">${i.nombre}</p>
+                            <p class="text-[10px] text-slate-500">S/ ${i.precio.toFixed(2)} c/u</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="cambiarCantidad('${i.nombre}', -1)" class="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">-</button>
+                            <span class="text-xs font-bold">${i.cantidad}</span>
+                            <button onclick="cambiarCantidad('${i.nombre}', 1)" class="w-6 h-6 rounded-lg bg-purple-600 text-white font-bold text-xs flex items-center justify-center">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('cart-count').innerText = count;
+            document.getElementById('cart-total').innerText = 'S/ ' + total.toFixed(2);
+            document.getElementById('modal-total').innerText = 'S/ ' + total.toFixed(2);
+            document.getElementById('lista-carrito').innerHTML = html || '<p class="text-slate-400 text-xs text-center py-8">Tu carrito está vacío.</p>';
+        }
+
+        function abrirCarrito() {
+            document.getElementById('modal-carrito').classList.remove('hidden');
+        }
+
+        function cerrarCarrito() {
+            document.getElementById('modal-carrito').classList.add('hidden');
+        }
+
+        function filtrarCategoria(cat, btn) {
+            document.querySelectorAll('.cat-btn').forEach(b => {
+                b.classList.remove('bg-purple-600', 'text-white', 'border-purple-600', 'shadow-md');
+                b.classList.add('bg-white', 'text-slate-600', 'border-slate-200');
+            });
+            btn.classList.add('bg-purple-600', 'text-white', 'border-purple-600', 'shadow-md');
+
+            document.querySelectorAll('.card-producto').forEach(card => {
+                if (cat === 'TODAS' || card.getAttribute('data-categoria').toUpperCase() === cat.toUpperCase()) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+        }
+
+        function enviarPedidoWhatsApp() {
+            if (carrito.length === 0) {
+                alert('Tu carrito está vacío.');
+                return;
+            }
+            let texto = "🛒 *NUEVO PEDIDO - TIENDA D'LIANIS*\n\n";
+            let total = 0;
+            carrito.forEach(i => {
+                let sub = i.precio * i.cantidad;
+                total += sub;
+                texto += `• ${i.cantidad}x ${i.nombre} - S/ ${sub.toFixed(2)}\n`;
+            });
+            texto += `\n💰 *TOTAL A PAGAR: S/ ${total.toFixed(2)}*`;
+            
+            let url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+            window.open(url, '_blank');
+        }
+    </script>
 </body>
 </html>
