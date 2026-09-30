@@ -1,5 +1,5 @@
 # =========================================================
-# ARCHIVO COMPLETO: app.py (Auto-Detector de Base de Datos e Imágenes)
+# ARCHIVO COMPLETO: pos_minimarket/app.py
 # =========================================================
 import os
 from io import BytesIO
@@ -11,10 +11,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_db_connection():
-    """
-    Busca automáticamente el archivo de la base de datos SQLite 
-    en todas las carpetas posibles de Render (minimarket.db, minimarket, pos_minimarket.db, etc.)
-    """
+    """Conexión SQLite con autodetección de base de datos"""
     candidatos = [
         os.path.join(BASE_DIR, 'datos_tienda', 'minimarket.db'),
         os.path.join(BASE_DIR, 'datos_tienda', 'minimarket'),
@@ -22,14 +19,12 @@ def get_db_connection():
         os.path.join(BASE_DIR, 'datos_tienda', 'tienda.db'),
         os.path.join(BASE_DIR, 'minimarket.db'),
         os.path.join(BASE_DIR, 'minimarket'),
-        os.path.join(BASE_DIR, 'pos_minimarket.db'),
     ]
     
-    # Escanear la carpeta datos_tienda por cualquier archivo de base de datos
     carpeta_datos = os.path.join(BASE_DIR, 'datos_tienda')
     if os.path.exists(carpeta_datos):
         for f in os.listdir(carpeta_datos):
-            if not f.endswith('-shm') and not f.endswith('-wal') and not f.endswith('.log') and not f.endswith('.txt'):
+            if not f.endswith(('-shm', '-wal', '.log', '.txt')):
                 candidatos.append(os.path.join(carpeta_datos, f))
 
     for ruta in candidatos:
@@ -38,7 +33,6 @@ def get_db_connection():
                 conn = sqlite3.connect(ruta)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                # Verificar si contiene tablas de productos
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('productos', 'producto')")
                 if cursor.fetchone():
                     return conn
@@ -46,14 +40,12 @@ def get_db_connection():
             except Exception:
                 continue
 
-    # Fallback si aún no existe
-    ruta_default = os.path.join(BASE_DIR, 'datos_tienda', 'minimarket.db')
-    conn = sqlite3.connect(ruta_default)
+    conn = sqlite3.connect(os.path.join(BASE_DIR, 'datos_tienda', 'minimarket.db'))
     conn.row_factory = sqlite3.Row
     return conn
 
 # =========================================================
-# RUTA PARA SERVIR IMÁGENES
+# RUTA DE IMÁGENES CON FALLBACK
 # =========================================================
 @app.route('/imagen_producto/<path:filename>')
 def servir_imagen_producto(filename):
@@ -70,13 +62,11 @@ def servir_imagen_producto(filename):
         BASE_DIR
     ]
 
-    # 1. Coincidencia exacta
     for carpeta in posibles_carpetas:
-        ruta_completa = os.path.join(carpeta, filename)
-        if os.path.exists(ruta_completa) and os.path.isfile(ruta_completa):
+        ruta = os.path.join(carpeta, filename)
+        if os.path.exists(ruta) and os.path.isfile(ruta):
             return send_from_directory(carpeta, filename)
 
-    # 2. Insensible a mayúsculas/minúsculas
     for carpeta in posibles_carpetas:
         if os.path.exists(carpeta):
             try:
@@ -86,12 +76,11 @@ def servir_imagen_producto(filename):
             except Exception:
                 continue
 
-    # 3. Fallback SVG si no se encuentra
     svg_fallback = '''<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="background:#f3e8ff;"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>'''
     return send_file(BytesIO(svg_fallback.encode('utf-8')), mimetype='image/svg+xml')
 
 # =========================================================
-# RUTA DEL CATÁLOGO ONLINE
+# RUTA DEL CATÁLOGO ONLINE COMPLETO
 # =========================================================
 @app.route('/')
 @app.route('/catalogo')
@@ -100,7 +89,6 @@ def catalogo():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Buscar en tabla 'productos' o 'producto'
         try:
             cursor.execute("SELECT * FROM productos")
         except sqlite3.OperationalError:
@@ -110,20 +98,43 @@ def catalogo():
         conn.close()
 
         productos = []
+        categorias = set()
+
         for p in productos_raw:
             prod = dict(p)
-            # Mapear campos flexibles (compatibilidad con diferentes esquemas SQL)
-            prod['nombre'] = prod.get('nombre') or prod.get('producto') or 'Producto'
-            prod['precio'] = prod.get('precio') or prod.get('p_venta') or prod.get('costo') or 0.0
+            
+            # Autodetección de Nombre
+            prod['nombre'] = prod.get('nombre') or prod.get('producto') or prod.get('descripcion') or 'Producto'
+            
+            # Autodetección de Precio (precio_venta, p_venta, precio_unitario, etc.)
+            raw_precio = (
+                prod.get('precio_venta') if prod.get('precio_venta') is not None else
+                prod.get('precio') if prod.get('precio') is not None else
+                prod.get('p_venta') if prod.get('p_venta') is not None else
+                prod.get('precio_unitario') if prod.get('precio_unitario') is not None else
+                prod.get('precio_publico') if prod.get('precio_publico') is not None else 0.0
+            )
+            try:
+                prod['precio'] = float(raw_precio)
+            except (ValueError, TypeError):
+                prod['precio'] = 0.0
+
+            # Autodetección de Categoría
+            cat = prod.get('categoria') or prod.get('categoria_nombre') or prod.get('rubro') or 'General'
+            prod['categoria'] = str(cat).strip().title()
+            categorias.add(prod['categoria'])
+
+            # URL de la Imagen
             nombre_img = prod.get('imagen') or prod.get('foto') or prod.get('img') or 'default.svg'
-            prod['imagen_url'] = url_for('servir_imagen_producto', filename=nombre_img)
+            prod['imagen_url'] = url_for('servir_imagen_producto', filename=str(nombre_img))
+            
             productos.append(prod)
 
-        return render_template('catalogo.html', productos=productos)
+        return render_template('catalogo.html', productos=productos, categorias=sorted(list(categorias)))
 
     except Exception as e:
         app.logger.error(f"Error en catálogo: {e}")
-        return render_template('catalogo.html', productos=[], error=str(e))
+        return render_template('catalogo.html', productos=[], categorias=[], error=str(e))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
